@@ -6,6 +6,8 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 KEYWORDS = ["ai", "machine learning", "ml", "data scientist"]
 MAX_JOBS = 20
 
+TEST_MODE = os.getenv("TEST_MODE", "False") == "True"
+
 # ------------------ SCRAPERS ------------------ #
 def fetch_indeed():
     url = "https://www.indeed.com/jobs?q=ai+engineer&l=India"
@@ -108,6 +110,40 @@ def fetch_monster_india():
         print("ERROR: fetch_monster_india failed:", e)
         return []
 
+# ------------------ NEW SCRAPERS ------------------ #
+def fetch_fresherworld():
+    url = "https://www.fresherworld.com/jobs/ai-machine-learning"
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for job in soup.select(".jobBox")[:10]:
+            title_tag = job.select_one(".jobTitle")
+            link_tag = job.select_one("a")
+            if title_tag and link_tag:
+                link = "https://www.fresherworld.com" + link_tag["href"]
+                jobs.append({"source": "FresherWorld", "title": title_tag.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_fresherworld failed:", e)
+        return []
+
+def fetch_internshala():
+    url = "https://internshala.com/internships/ai-internship"
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for job in soup.select(".internship_meta")[:10]:
+            title_tag = job.select_one("a")
+            if title_tag:
+                link = "https://internshala.com" + title_tag["href"]
+                jobs.append({"source": "Internshala", "title": title_tag.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_internshala failed:", e)
+        return []
+
 # ------------------ FILTER + DEDUP ------------------ #
 def filter_jobs(jobs):
     return [job for job in jobs if any(k.lower() in job["title"].lower() for k in KEYWORDS)]
@@ -132,7 +168,6 @@ def send_telegram(jobs):
         return
 
     if not jobs:
-        # Always send a test message if no jobs found
         text = "✅ GitHub Test: No jobs found today"
     else:
         text = "🔥 AI/ML Jobs Found:\n\n"
@@ -150,15 +185,27 @@ def send_telegram(jobs):
 
 # ------------------ MAIN ------------------ #
 def main():
-    print("DEBUG: Starting GitHub Actions test run...")
+    print("DEBUG: Starting GitHub Actions run...")
 
     jobs = []
-    jobs.extend(fetch_indeed())
-    jobs.extend(fetch_remoteok())
-    jobs.extend(fetch_weworkremotely())
-    jobs.extend(fetch_placement_india())
-    jobs.extend(fetch_workindia())
-    jobs.extend(fetch_monster_india())
+
+    if TEST_MODE:
+        # Always send one test job during testing
+        jobs.append({
+            "source": "TestSite",
+            "title": "AI Engineer (Test Job)",
+            "link": "https://example.com/job"
+        })
+    else:
+        # Real scraping
+        jobs.extend(fetch_indeed())
+        jobs.extend(fetch_remoteok())
+        jobs.extend(fetch_weworkremotely())
+        jobs.extend(fetch_placement_india())
+        jobs.extend(fetch_workindia())
+        jobs.extend(fetch_monster_india())
+        jobs.extend(fetch_fresherworld())
+        jobs.extend(fetch_internshala())
 
     jobs = filter_jobs(jobs)
     jobs = deduplicate_jobs(jobs)
@@ -168,7 +215,7 @@ def main():
         print(f"{job['title']} [{job['source']}] - {job['link']}")
 
     send_telegram(jobs)
-    print("DEBUG: Finished GitHub Actions test run.")
+    print("DEBUG: Finished GitHub Actions run.")
 
 if __name__ == "__main__":
     main()
