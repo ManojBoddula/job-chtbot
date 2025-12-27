@@ -6,7 +6,6 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 KEYWORDS = ["ai", "machine learning", "ml", "data scientist"]
 MAX_JOBS = 20
 
-
 # ------------------ SCRAPERS ------------------ #
 def fetch_indeed():
     url = "https://www.indeed.com/jobs?q=ai+engineer&l=India"
@@ -18,14 +17,8 @@ def fetch_indeed():
         link_tag = job.select_one("h2 a")
         if title:
             link = "https://www.indeed.com" + link_tag["href"] if link_tag else ""
-            jobs.append({
-                "source": "Indeed",
-                "title": title.text.strip(),
-                "company": "",
-                "link": link
-            })
+            jobs.append({"source": "Indeed", "title": title.text.strip(), "link": link})
     return jobs
-
 
 def fetch_remoteok():
     url = "https://remoteok.com/remote-ai-jobs"
@@ -37,14 +30,8 @@ def fetch_remoteok():
         link_tag = row.select_one("a.preventLink")
         if title:
             link = "https://remoteok.com" + link_tag["href"] if link_tag else ""
-            jobs.append({
-                "source": "RemoteOK",
-                "title": title.text.strip(),
-                "company": "",
-                "link": link
-            })
+            jobs.append({"source": "RemoteOK", "title": title.text.strip(), "link": link})
     return jobs
-
 
 def fetch_weworkremotely():
     url = "https://weworkremotely.com/remote-jobs/search?term=ai"
@@ -56,14 +43,8 @@ def fetch_weworkremotely():
         link_tag = job.select_one("a")
         if title and link_tag:
             link = "https://weworkremotely.com" + link_tag["href"]
-            jobs.append({
-                "source": "WeWorkRemotely",
-                "title": title.text.strip(),
-                "company": "",
-                "link": link
-            })
+            jobs.append({"source": "WeWorkRemotely", "title": title.text.strip(), "link": link})
     return jobs
-
 
 def fetch_placement_india():
     url = "https://www.placementindia.com/jobs/search-jobs-in-india.html?keyword=ai"
@@ -74,17 +55,10 @@ def fetch_placement_india():
         title = row.select_one("a")
         if title:
             link = title["href"]
-            jobs.append({
-                "source": "PlacementIndia",
-                "title": title.text.strip(),
-                "company": "",
-                "link": link
-            })
+            jobs.append({"source": "PlacementIndia", "title": title.text.strip(), "link": link})
     return jobs
 
-
 def fetch_workindia():
-    # WorkIndia uses simpler HTML job list for specific search
     url = "https://www.workindia.in/job-search/ai%20engineer"
     res = requests.get(url, headers=HEADERS)
     soup = BeautifulSoup(res.text, "html.parser")
@@ -94,14 +68,8 @@ def fetch_workindia():
         link_tag = job.select_one("a")
         if title:
             link = "https://www.workindia.in" + link_tag["href"] if link_tag else ""
-            jobs.append({
-                "source": "WorkIndia",
-                "title": title.text.strip(),
-                "company": "",
-                "link": link
-            })
+            jobs.append({"source": "WorkIndia", "title": title.text.strip(), "link": link})
     return jobs
-
 
 def fetch_monster_india():
     url = "https://www.monsterindia.com/search/ai-engineer-jobs"
@@ -113,22 +81,12 @@ def fetch_monster_india():
         link_tag = job.select_one("a")
         if title_tag and link_tag:
             link = link_tag["href"]
-            jobs.append({
-                "source": "MonsterIndia",
-                "title": title_tag.text.strip(),
-                "company": "",
-                "link": link
-            })
+            jobs.append({"source": "MonsterIndia", "title": title_tag.text.strip(), "link": link})
     return jobs
-
 
 # ------------------ FILTER + DEDUP ------------------ #
 def filter_jobs(jobs):
-    return [
-        job for job in jobs
-        if any(k.lower() in job["title"].lower() for k in KEYWORDS)
-    ]
-
+    return [job for job in jobs if any(k.lower() in job["title"].lower() for k in KEYWORDS)]
 
 def deduplicate_jobs(jobs):
     seen = set()
@@ -140,13 +98,14 @@ def deduplicate_jobs(jobs):
             unique.append(job)
     return unique
 
-
 # ------------------ TELEGRAM ------------------ #
 def send_telegram(jobs):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
     if not token or not chat_id:
-        raise Exception("Telegram credentials missing")
+        print("ERROR: Telegram credentials missing!")
+        return
 
     if not jobs:
         text = "❌ No jobs found today"
@@ -157,8 +116,12 @@ def send_telegram(jobs):
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": chat_id, "text": text}
-    requests.post(url, data=payload)
 
+    try:
+        response = requests.post(url, data=payload)
+        print("DEBUG: Telegram API response:", response.status_code, response.text)
+    except Exception as e:
+        print("ERROR: Failed to send Telegram message:", e)
 
 # ------------------ MAIN ------------------ #
 def main():
@@ -172,8 +135,12 @@ def main():
 
     jobs = filter_jobs(jobs)
     jobs = deduplicate_jobs(jobs)
-    send_telegram(jobs)
 
+    print("DEBUG: Total jobs found:", len(jobs))
+    for job in jobs[:10]:
+        print(f"{job['title']} [{job['source']}] - {job['link']}")
+
+    send_telegram(jobs)
 
 if __name__ == "__main__":
     main()

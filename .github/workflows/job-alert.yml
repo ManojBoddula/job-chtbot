@@ -1,9 +1,9 @@
 name: AI Job Finder Bot
 
 on:
-  workflow_dispatch:   # allows manual run
+  workflow_dispatch:   # manual run
   schedule:
-    - cron: "0 9 * * *"   # runs daily at 9 AM UTC
+    - cron: "0 9 * * *"  # daily at 9 AM UTC
 
 jobs:
   run-job-scraper:
