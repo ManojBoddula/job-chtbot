@@ -9,80 +9,104 @@ MAX_JOBS = 20
 # ------------------ SCRAPERS ------------------ #
 def fetch_indeed():
     url = "https://www.indeed.com/jobs?q=ai+engineer&l=India"
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-    jobs = []
-    for job in soup.select(".job_seen_beacon")[:10]:
-        title = job.select_one("h2 span")
-        link_tag = job.select_one("h2 a")
-        if title:
-            link = "https://www.indeed.com" + link_tag["href"] if link_tag else ""
-            jobs.append({"source": "Indeed", "title": title.text.strip(), "link": link})
-    return jobs
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for job in soup.select(".job_seen_beacon")[:10]:
+            title = job.select_one("h2 span")
+            link_tag = job.select_one("h2 a")
+            if title:
+                link = "https://www.indeed.com" + link_tag["href"] if link_tag else ""
+                jobs.append({"source": "Indeed", "title": title.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_indeed failed:", e)
+        return []
 
 def fetch_remoteok():
     url = "https://remoteok.com/remote-ai-jobs"
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-    jobs = []
-    for row in soup.select("tr.job")[:10]:
-        title = row.select_one("h2")
-        link_tag = row.select_one("a.preventLink")
-        if title:
-            link = "https://remoteok.com" + link_tag["href"] if link_tag else ""
-            jobs.append({"source": "RemoteOK", "title": title.text.strip(), "link": link})
-    return jobs
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for row in soup.select("tr.job")[:10]:
+            title = row.select_one("h2")
+            link_tag = row.select_one("a.preventLink")
+            if title:
+                link = "https://remoteok.com" + link_tag["href"] if link_tag else ""
+                jobs.append({"source": "RemoteOK", "title": title.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_remoteok failed:", e)
+        return []
 
 def fetch_weworkremotely():
     url = "https://weworkremotely.com/remote-jobs/search?term=ai"
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-    jobs = []
-    for job in soup.select("section.jobs article li")[:10]:
-        title = job.select_one("span.title")
-        link_tag = job.select_one("a")
-        if title and link_tag:
-            link = "https://weworkremotely.com" + link_tag["href"]
-            jobs.append({"source": "WeWorkRemotely", "title": title.text.strip(), "link": link})
-    return jobs
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for job in soup.select("section.jobs article li")[:10]:
+            title = job.select_one("span.title")
+            link_tag = job.select_one("a")
+            if title and link_tag:
+                link = "https://weworkremotely.com" + link_tag["href"]
+                jobs.append({"source": "WeWorkRemotely", "title": title.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_weworkremotely failed:", e)
+        return []
 
 def fetch_placement_india():
     url = "https://www.placementindia.com/jobs/search-jobs-in-india.html?keyword=ai"
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-    jobs = []
-    for row in soup.select(".jobListRow")[:10]:
-        title = row.select_one("a")
-        if title:
-            link = title["href"]
-            jobs.append({"source": "PlacementIndia", "title": title.text.strip(), "link": link})
-    return jobs
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for row in soup.select(".jobListRow")[:10]:
+            title = row.select_one("a")
+            if title:
+                link = title["href"]
+                jobs.append({"source": "PlacementIndia", "title": title.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_placement_india failed:", e)
+        return []
 
 def fetch_workindia():
     url = "https://www.workindia.in/job-search/ai%20engineer"
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-    jobs = []
-    for job in soup.select(".level-job")[:10]:
-        title = job.select_one(".job-title")
-        link_tag = job.select_one("a")
-        if title:
-            link = "https://www.workindia.in" + link_tag["href"] if link_tag else ""
-            jobs.append({"source": "WorkIndia", "title": title.text.strip(), "link": link})
-    return jobs
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for job in soup.select(".level-job")[:10]:
+            title = job.select_one(".job-title")
+            link_tag = job.select_one("a")
+            if title:
+                link = "https://www.workindia.in" + link_tag["href"] if link_tag else ""
+                jobs.append({"source": "WorkIndia", "title": title.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_workindia failed:", e)
+        return []
 
 def fetch_monster_india():
     url = "https://www.monsterindia.com/search/ai-engineer-jobs"
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-    jobs = []
-    for job in soup.select(".job-tittle")[:10]:
-        title_tag = job.select_one("h3")
-        link_tag = job.select_one("a")
-        if title_tag and link_tag:
-            link = link_tag["href"]
-            jobs.append({"source": "MonsterIndia", "title": title_tag.text.strip(), "link": link})
-    return jobs
+    try:
+        res = requests.get(url, headers=HEADERS)
+        soup = BeautifulSoup(res.text, "html.parser")
+        jobs = []
+        for job in soup.select(".job-tittle")[:10]:
+            title_tag = job.select_one("h3")
+            link_tag = job.select_one("a")
+            if title_tag and link_tag:
+                link = link_tag["href"]
+                jobs.append({"source": "MonsterIndia", "title": title_tag.text.strip(), "link": link})
+        return jobs
+    except Exception as e:
+        print("ERROR: fetch_monster_india failed:", e)
+        return []
 
 # ------------------ FILTER + DEDUP ------------------ #
 def filter_jobs(jobs):
@@ -108,7 +132,8 @@ def send_telegram(jobs):
         return
 
     if not jobs:
-        text = "❌ No jobs found today"
+        # Always send a test message if no jobs found
+        text = "✅ GitHub Test: No jobs found today"
     else:
         text = "🔥 AI/ML Jobs Found:\n\n"
         for job in jobs[:MAX_JOBS]:
@@ -125,6 +150,8 @@ def send_telegram(jobs):
 
 # ------------------ MAIN ------------------ #
 def main():
+    print("DEBUG: Starting GitHub Actions test run...")
+
     jobs = []
     jobs.extend(fetch_indeed())
     jobs.extend(fetch_remoteok())
@@ -141,6 +168,7 @@ def main():
         print(f"{job['title']} [{job['source']}] - {job['link']}")
 
     send_telegram(jobs)
+    print("DEBUG: Finished GitHub Actions test run.")
 
 if __name__ == "__main__":
     main()
