@@ -1,2 +1,4 @@
 .env
 jobs_seen.csv
+__pycache__/
+*.pyc
