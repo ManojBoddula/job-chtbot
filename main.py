@@ -1,199 +1,300 @@
 import os
+import re
+import csv
+import time
+import random
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+from ddgs import DDGS
+
+load_dotenv()
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
-KEYWORDS = ["ai", "machine learning", "ml", "data scientist"]
-MAX_JOBS = 20
+MAX_JOBS = 40
+DATABASE = "jobs_seen.csv"
 
-TEST_MODE = os.getenv("TEST_MODE", "False") == "True"
+# ---------------- JOB FILTER ---------------- #
+# AI/ML + Software + Entry-level + Internship
+JOB_PATTERN = re.compile(
+    r"(ai|machine learning|ml engineer|ai engineer|deep learning|"
+    r"data scientist|computer vision|nlp|artificial intelligence|"
+    r"software engineer|sde|software developer|backend engineer| Prompt|python|python developer)",
+    re.IGNORECASE
+)
 
-# ------------------ STATIC SCRAPER FUNCTION ------------------ #
-def fetch_static_site(url, source, selector_title, selector_link, link_prefix=""):
+EXPERIENCE_PATTERN = re.compile(
+    r"(entry[- ]level|junior|0-2 years|internship|intern)",
+    re.IGNORECASE
+)
+
+# ---------------- INDIA PRIORITY ---------------- #
+INDIA_KEYWORDS = [
+    "india","bangalore","bengaluru","hyderabad",
+    "pune","chennai","mumbai","delhi","noida","gurgaon",
+    "kolkata","kochi","ahmedabad","jaipur","trivandrum"
+]
+
+# ---------------- LOAD SEEN JOBS ---------------- #
+def load_seen():
+    seen = set()
+    if os.path.exists(DATABASE):
+        with open(DATABASE, "r") as f:
+            for row in csv.reader(f):
+                seen.add(tuple(row))
+    return seen
+
+# ---------------- SAVE JOBS ---------------- #
+def save_seen(jobs):
+    with open(DATABASE, "a", newline="") as f:
+        writer = csv.writer(f)
+        for j in jobs:
+            writer.writerow([j["title"], j["link"]])
+
+# ---------------- FETCH JOBS FROM REMOTE APIs ---------------- #
+def fetch_remotive():
+    jobs = []
     try:
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-        jobs = []
-        for job in soup.select(selector_title)[:10]:
-            title_tag = job
-            link_tag = job.select_one(selector_link)
-            if title_tag:
-                link = link_prefix + link_tag["href"] if link_tag else ""
-                jobs.append({"source": source, "title": title_tag.text.strip(), "link": link})
-        return jobs
+        url = "https://remotive.com/api/remote-jobs"
+        res = requests.get(url)
+        data = res.json()
+        for job in data["jobs"]:
+            jobs.append({
+                "source": "Remotive",
+                "title": job["title"],
+                "company": job["company_name"],
+                "location": job["candidate_required_location"],
+                "description": job["description"][:200],
+                "link": job["url"]
+            })
     except Exception as e:
-        print(f"ERROR: fetch_{source} failed:", e)
-        return []
+        print("Remotive error:", e)
+    print("Remotive:", len(jobs))
+    return jobs
 
-# ------------------ WEBSITES ------------------ #
-def fetch_fresherworld():
-    return fetch_static_site(
-        "https://www.fresherworld.com/jobs/ai-machine-learning",
-        "FresherWorld",
-        ".jobTitle",
-        "a",
-        "https://www.fresherworld.com"
-    )
+def fetch_arbeitnow():
+    jobs = []
+    try:
+        url = "https://www.arbeitnow.com/api/job-board-api"
+        res = requests.get(url)
+        data = res.json()
+        for job in data["data"]:
+            jobs.append({
+                "source": "Arbeitnow",
+                "title": job["title"],
+                "company": job["company_name"],
+                "location": job["location"],
+                "description": job["description"][:200],
+                "link": job["url"]
+            })
+    except Exception as e:
+        print("Arbeitnow error:", e)
+    print("Arbeitnow:", len(jobs))
+    return jobs
+
+def fetch_muse():
+    jobs = []
+    try:
+        for page in range(1, 6):
+            url = f"https://www.themuse.com/api/public/jobs?page={page}"
+            res = requests.get(url)
+            data = res.json()
+            for job in data["results"]:
+                loc = job["locations"][0]["name"] if job["locations"] else "Unknown"
+                jobs.append({
+                    "source": "Muse",
+                    "title": job["name"],
+                    "company": job["company"]["name"],
+                    "location": loc,
+                    "description": job["contents"][:200],
+                    "link": job["refs"]["landing_page"]
+                })
+            time.sleep(random.uniform(1, 3))
+    except Exception as e:
+        print("Muse error:", e)
+    print("Muse:", len(jobs))
+    return jobs
 
 def fetch_internshala():
-    return fetch_static_site(
-        "https://internshala.com/internships/ai-internship",
-        "Internshala",
-        ".internship_meta a",
-        "a",
-        "https://internshala.com"
-    )
-
-def fetch_workindia():
-    return fetch_static_site(
-        "https://www.workindia.in/job-search/ai%20engineer",
-        "WorkIndia",
-        ".job-title",
-        "a",
-        "https://www.workindia.in"
-    )
-
-def fetch_placement_india():
-    return fetch_static_site(
-        "https://www.placementindia.com/jobs/search-jobs-in-india.html?keyword=ai",
-        "PlacementIndia",
-        ".jobListRow a",
-        "a",
-        ""
-    )
-
-def fetch_monster_india():
-    return fetch_static_site(
-        "https://www.monsterindia.com/search/ai-engineer-jobs",
-        "MonsterIndia",
-        ".job-tittle h3",
-        "a",
-        ""
-    )
-
-def fetch_remoteok():
+    jobs = []
     try:
-        url = "https://remoteok.com/remote-ai-jobs"
-        res = requests.get(url, headers=HEADERS, timeout=10)
+        url = "https://internshala.com/internships"
+        res = requests.get(url, headers=HEADERS)
         soup = BeautifulSoup(res.text, "html.parser")
-        jobs = []
-        for row in soup.select("tr.job")[:10]:
-            title_tag = row.select_one("h2")
-            link_tag = row.select_one("a.preventLink")
-            if title_tag:
-                link = "https://remoteok.com" + link_tag["href"] if link_tag else ""
-                jobs.append({"source": "RemoteOK", "title": title_tag.text.strip(), "link": link})
-        return jobs
+        for j in soup.select(".job-title-href")[:40]:
+            jobs.append({
+                "source": "Internshala",
+                "title": j.text.strip() + " Internship",
+                "company": "N/A",
+                "location": "India",
+                "description": "Internship / Entry-level",
+                "link": "https://internshala.com" + j["href"]
+            })
     except Exception as e:
-        print("ERROR: fetch_remoteok failed:", e)
-        return []
+        print("Internshala error:", e)
+    print("Internshala:", len(jobs))
+    return jobs
 
-def fetch_weworkremotely():
+# ---------------- SEARCH DISCOVERY ---------------- #
+def fetch_search():
+    queries = [
+        # AI/ML entry-level and internship jobs
+        "AI engineer India internship site:wellfound.com",
+        "machine learning Bangalore entry-level site:wellfound.com",
+        "data scientist Hyderabad internship site:wellfound.com",
+        "deep learning Pune entry-level site:wellfound.com",
+        "nlp Chennai internship site:wellfound.com",
+        # Software jobs
+        "Software engineer India entry-level site:wellfound.com",
+        "SDE Bangalore 0-2 years site:wellfound.com",
+        "SDE-1 Hyderabad entry-level site:wellfound.com",
+        "Backend engineer Pune 0-2 years site:wellfound.com",
+        "Frontend engineer Chennai internship site:wellfound.com",
+        # Generic remote boards
+        "AI engineer site:boards.greenhouse.io",
+        "Software engineer site:boards.greenhouse.io",
+        "machine learning site:jobs.lever.co",
+        "SDE site:jobs.lever.co",
+        "data scientist site:ashbyhq.com",
+        "Software developer site:ashbyhq.com"
+    ]
+    jobs = []
     try:
-        url = "https://weworkremotely.com/remote-jobs/search?term=ai"
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-        jobs = []
-        for job in soup.select("section.jobs article li")[:10]:
-            title_tag = job.select_one("span.title")
-            link_tag = job.select_one("a")
-            if title_tag and link_tag:
-                link = "https://weworkremotely.com" + link_tag["href"]
-                jobs.append({"source": "WeWorkRemotely", "title": title_tag.text.strip(), "link": link})
-        return jobs
+        with DDGS() as ddgs:
+            for q in queries:
+                results = ddgs.text(q, max_results=120)
+                for r in results:
+                    body = r.get("body", "")
+                    location = "Unknown"
+                    if any(city in body.lower() for city in INDIA_KEYWORDS) or "india" in body.lower():
+                        location = "India"
+                    jobs.append({
+                        "source": "Search",
+                        "title": r["title"],
+                        "company": "Unknown",
+                        "location": location,
+                        "description": body[:200],
+                        "link": r["href"]
+                    })
+                time.sleep(random.uniform(2, 4))
     except Exception as e:
-        print("ERROR: fetch_weworkremotely failed:", e)
-        return []
+        print("Search error:", e)
+    print("Search:", len(jobs))
+    return jobs
 
-def fetch_indeed():
-    try:
-        url = "https://www.indeed.com/jobs?q=ai+engineer&l=India"
-        res = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(res.text, "html.parser")
-        jobs = []
-        for job in soup.select(".job_seen_beacon")[:10]:
-            title_tag = job.select_one("h2 span")
-            link_tag = job.select_one("h2 a")
-            if title_tag:
-                link = "https://www.indeed.com" + link_tag["href"] if link_tag else ""
-                jobs.append({"source": "Indeed", "title": title_tag.text.strip(), "link": link})
-        return jobs
-    except Exception as e:
-        print("ERROR: fetch_indeed failed:", e)
-        return []
-
-# ------------------ FILTER + DEDUP ------------------ #
+# ---------------- FILTER ---------------- #
 def filter_jobs(jobs):
-    return [job for job in jobs if any(k.lower() in job["title"].lower() for k in KEYWORDS)]
+    # Keep only jobs matching roles AND entry-level / internship
+    filtered = []
+    for j in jobs:
+        title_desc = j["title"] + " " + j["description"]
+        if JOB_PATTERN.search(title_desc) and EXPERIENCE_PATTERN.search(title_desc):
+            filtered.append(j)
+    return filtered
 
-def deduplicate_jobs(jobs):
-    seen = set()
+# ---------------- DEDUP ---------------- #
+def deduplicate(jobs, seen):
     unique = []
-    for job in jobs:
-        key = (job["title"], job["link"])
+    for j in jobs:
+        key = (j["title"], j["link"])
         if key not in seen:
+            unique.append(j)
             seen.add(key)
-            unique.append(job)
     return unique
 
-# ------------------ TELEGRAM ------------------ #
+# ---------------- INDIA PRIORITY ---------------- #
+def prioritize(jobs):
+    india = []
+    others = []
+    for j in jobs:
+        loc = str(j.get("location", "")).lower()
+        desc = str(j.get("description", "")).lower()
+        if any(k in loc for k in INDIA_KEYWORDS) or "india" in loc or "india" in desc:
+            india.append(j)
+        elif "remote" in loc:
+            india.append(j)
+        else:
+            others.append(j)
+    return india + others
+
+# ---------------- TELEGRAM ---------------- #
 def send_telegram(jobs):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    chat = os.getenv("TELEGRAM_CHAT_ID")
 
-    if not token or not chat_id:
-        print("ERROR: Telegram credentials missing!")
-        return
+    india = []
+    others = []
 
-    if not jobs:
-        text = "✅ GitHub Test: No jobs found today"
-    else:
-        text = "🔥 AI/ML Jobs Found:\n\n"
-        for job in jobs[:MAX_JOBS]:
-            text += f"• {job['title']} [{job['source']}]\n{job['link']}\n\n"
+    for j in jobs:
+        loc = str(j.get("location","")).lower()
+        desc = str(j.get("description","")).lower()
+        if any(k in loc for k in INDIA_KEYWORDS) or "india" in loc or "india" in desc or "remote" in loc:
+            india.append(j)
+        else:
+            others.append(j)
 
-    try:
-        response = requests.post(
+    def send_message(text):
+        requests.post(
             f"https://api.telegram.org/bot{token}/sendMessage",
-            data={"chat_id": chat_id, "text": text}
+            data={"chat_id": chat, "text": text}
         )
-        print("DEBUG: Telegram API response:", response.status_code, response.text)
-    except Exception as e:
-        print("ERROR: Failed to send Telegram message:", e)
 
-# ------------------ MAIN ------------------ #
-def main():
-    print("DEBUG: Starting GitHub Actions run...")
+    # ---------- INDIAN JOBS ---------- #
+    if india:
+        send_message("🇮🇳 Indian Entry-level & Internship AI/Software Jobs")
 
+        for j in india[:MAX_JOBS]:
+            msg = (
+                f"💼 {j['title']}\n"
+                f"🏢 {j['company']}\n"
+                f"📍 {j['location']}\n"
+                f"🔗 {j['link']}"
+            )
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                          data={"chat_id": chat, "text": msg})
+            time.sleep(random.uniform(1, 2))
+
+    # ---------- INTERNATIONAL JOBS ---------- #
+    if others:
+        send_message("🌍 International Entry-level & Internship AI/Software Jobs")
+        for j in others[:MAX_JOBS]:
+            msg = (
+                f"💼 {j['title']}\n"
+                f"🏢 {j['company']}\n"
+                f"📍 {j['location']}\n"
+                f"🔗 {j['link']}"
+            )
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                          data={"chat_id": chat, "text": msg})
+            time.sleep(random.uniform(1, 2))
+
+# ---------------- RUN BOT ---------------- #
+def run_bot():
+    print("\nStarting job finder...\n")
+    seen = load_seen()
     jobs = []
 
-    if TEST_MODE:
-        # Send test job when testing
-        jobs.append({
-            "source": "TestSite",
-            "title": "AI Engineer (Test Job)",
-            "link": "https://example.com/job"
-        })
-    else:
-        # Real scraping from all websites
-        jobs.extend(fetch_fresherworld())
-        jobs.extend(fetch_internshala())
-        jobs.extend(fetch_workindia())
-        jobs.extend(fetch_placement_india())
-        jobs.extend(fetch_monster_india())
-        jobs.extend(fetch_remoteok())
-        jobs.extend(fetch_weworkremotely())
-        jobs.extend(fetch_indeed())
+    jobs += fetch_remotive()
+    jobs += fetch_arbeitnow()
+    jobs += fetch_muse()
+    jobs += fetch_internshala()
+    jobs += fetch_search()
+
+    print("Collected:", len(jobs))
 
     jobs = filter_jobs(jobs)
-    jobs = deduplicate_jobs(jobs)
+    jobs = deduplicate(jobs, seen)
+    jobs = prioritize(jobs)
 
-    print("DEBUG: Total jobs found:", len(jobs))
-    for job in jobs[:10]:
-        print(f"{job['title']} [{job['source']}] - {job['link']}")
+    print("Filtered:", len(jobs))
 
     send_telegram(jobs)
-    print("DEBUG: Finished GitHub Actions run.")
+    save_seen(jobs)
+    print("\nRun complete\n")
 
+# ---------------- LOOP ---------------- #
 if __name__ == "__main__":
-    main()
+    while True:
+        run_bot()
+        print("Sleeping 1 hour...\n")
+        time.sleep(3600)
